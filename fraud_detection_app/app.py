@@ -4,6 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import joblib
 import shap
+import os
 
 # ── Page config ──────────────────────────────────────────────
 st.set_page_config(
@@ -13,20 +14,21 @@ st.set_page_config(
 )
 
 # ── Load model and samples ───────────────────────────────────
+base_dir = os.path.dirname(os.path.abspath(__file__))
+
 @st.cache_resource
 def load_model():
-    import os
-    base_dir = os.path.dirname(os.path.abspath(__file__))
     return joblib.load(os.path.join(base_dir, 'best_model_xgb.pkl'))
 
 @st.cache_data
 def load_samples():
-    import os
-    base_dir = os.path.dirname(os.path.abspath(__file__))
     return pd.read_csv(os.path.join(base_dir, 'sample_transactions.csv'))
 
 model = load_model()
 samples_df = load_samples()
+
+# ── Feature columns ──────────────────────────────────────────
+feature_cols = [c for c in samples_df.columns if c not in ['label', 'Class']]
 
 # ── Results data (from your experiments) ─────────────────────
 results_data = {
@@ -158,7 +160,7 @@ if page == "📊 Dashboard":
     with col2:
         fig, ax = plt.subplots(figsize=(6, 5))
         cm = np.array([[56852, 12], [16, 82]])
-        im = ax.imshow(cm, cmap='Blues')
+        ax.imshow(cm, cmap='Blues')
         ax.set_xticks([0, 1]); ax.set_yticks([0, 1])
         ax.set_xticklabels(['Legitimate', 'Fraud'])
         ax.set_yticklabels(['Legitimate', 'Fraud'])
@@ -167,7 +169,8 @@ if page == "📊 Dashboard":
         for i in range(2):
             for j in range(2):
                 ax.text(j, i, f'{cm[i,j]:,}', ha='center', va='center',
-                       fontsize=14, color='white' if cm[i,j] > 30000 else 'black',
+                       fontsize=14,
+                       color='white' if cm[i,j] > 30000 else 'black',
                        fontweight='bold')
         st.pyplot(fig)
         plt.close()
@@ -204,11 +207,16 @@ elif page == "🔍 Live Demo":
 
     # Run prediction
     if st.button("🔍 Analyse Transaction", type="primary"):
-        feature_cols = [c for c in samples_df.columns if c != 'label']
-        X_input = transaction[feature_cols].values.reshape(1, -1)
 
+        # Prepare input as DataFrame with correct feature names
+        X_input = pd.DataFrame(
+            [transaction[feature_cols].values],
+            columns=feature_cols
+        )
+
+        # Prediction
         prob = model.predict_proba(X_input)[0][1]
-        pred = "🚨 FRAUD" if prob > 0.5 else "✅ LEGITIMATE"
+        pred = "🚨 FRAUD DETECTED" if prob > 0.5 else "✅ LEGITIMATE"
         color = "red" if prob > 0.5 else "green"
 
         st.markdown(f"### Prediction: :{color}[{pred}]")
@@ -222,22 +230,21 @@ elif page == "🔍 Live Demo":
 
         with st.spinner("Computing SHAP explanation..."):
             explainer = shap.TreeExplainer(model)
-            shap_values = explainer.shap_values(
-                pd.DataFrame(X_input, columns=feature_cols))
+            shap_values = explainer.shap_values(X_input)
 
             fig, ax = plt.subplots(figsize=(10, 6))
             shap.waterfall_plot(
                 shap.Explanation(
                     values=shap_values[0],
                     base_values=explainer.expected_value,
-                    data=X_input[0],
+                    data=X_input.values[0],
                     feature_names=feature_cols
                 ), show=False
             )
             st.pyplot(fig)
             plt.close()
 
-        st.info("Red bars push toward FRAUD. Blue bars push toward LEGITIMATE. The longer the bar, the stronger the influence.")
+        st.info("🔴 Red bars push toward FRAUD. 🔵 Blue bars push toward LEGITIMATE. The longer the bar, the stronger the influence.")
 
 # ════════════════════════════════════════════════════════════
 # PAGE 3: ABOUT
@@ -270,8 +277,8 @@ elif page == "ℹ️ About":
     - Cost-Sensitive Learning
 
     ### Best Result
-    **XGBoost + Cost-Sensitive Learning** achieved:
-    - F1 Score: 0.869
+    **XGBoost + Cost-Sensitive Learning (Tuned):**
+    - F1 Score: 0.865
     - AUROC: 0.982
     - AUPRC: 0.885
     - Precision: 0.908
@@ -284,5 +291,5 @@ elif page == "ℹ️ About":
     - 578:1 class imbalance ratio
 
     ---
-    *MSc Research Project 2025-2026*
+    *MSc Research Project 2025-2026 | Robert Gordon University*
     """)
