@@ -15,11 +15,15 @@ st.set_page_config(
 # ── Load model and samples ───────────────────────────────────
 @st.cache_resource
 def load_model():
-    return joblib.load('best_model_xgb.pkl')
+    import os
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    return joblib.load(os.path.join(base_dir, 'best_model_xgb.pkl'))
 
 @st.cache_data
 def load_samples():
-    return pd.read_csv('sample_transactions.csv')
+    import os
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    return pd.read_csv(os.path.join(base_dir, 'sample_transactions.csv'))
 
 model = load_model()
 samples_df = load_samples()
